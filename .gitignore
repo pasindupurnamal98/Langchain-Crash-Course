@@ -1,0 +1,60 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment folders
+venv/
+.venv/
+env/
+.env/
+
+# VSCode settings
+.vscode/
+
+# Jupyter Notebook files
+.ipynb_checkpoints/
+*.ipynb_checkpoint
+*.nbconvert.ipynb
+
+# Jupyter runtime files
+*.log
+*.out
+
+# Python environment files
+*.env
+.env.*
+*.ini
+*.cfg
+*.toml
+
+# macOS / Windows system files
+.DS_Store
+Thumbs.db
+
+# Coverage reports and test cache
+htmlcov/
+.tox/
+.nox/
+.coverage
+.cache/
+.pytest_cache/
+
+# Distribution files
+build/
+dist/
+*.egg-info/
+
+# LangChain or experiment outputs (optional)
+output/
+outputs/
+experiments/
+models/
+data/
+
+# Conda environment files
+conda-meta/
+
+# Node.js (in case you have front-end stuff)
+node_modules/
+package-lock.json
