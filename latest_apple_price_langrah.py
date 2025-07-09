@@ -1,71 +1,92 @@
 import os
+from typing import TypedDict, Annotated, Sequence
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
 from langchain_tavily import TavilySearch
 from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolExecutor
-from langchain.tools import tool
+from langgraph.graph.message import add_messages
 
-# ✅ Load .env vars
+# ✅ Load .env variables
 load_dotenv()
 
-# ✅ LLM (Azure GPT-4o)
+# ✅ Setup LLM (Azure GPT-4o)
 llm = AzureChatOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
     azure_endpoint=os.getenv("OPENAI_API_BASE"),
+    api_key=os.getenv("OPENAI_API_KEY"),
     api_version=os.getenv("OPENAI_API_VERSION"),
     azure_deployment=os.getenv("OPENAI_DEPLOYMENT_NAME"),
     temperature=0.3
 )
 
-# ✅ Web search tool
+# ✅ Tavily Tool (real-time search)
 search_tool = TavilySearch()
-tool_executor = ToolExecutor(tools=[search_tool])
 
-# ✅ Define Graph State (simple dict wrapper)
-class AssistantState(dict):
-    pass
+# ✅ Define the state schema properly
+class GraphState(TypedDict):
+    question: str
+    search_results: str
+    answer: str
 
-# ✅ STEP 1: User input -> Search
-def run_search(state):
-    query = state.get("question")
+# ✅ Node 1: Do real-time search using Tavily
+def run_search(state: GraphState) -> dict:
+    query = state["question"]
     print(f"\n🔍 Searching the web for: {query}")
-    search_results = tool_executor.invoke({"input": query})
-    return {"search_results": search_results["output"], "question": query}
+    
+    # TavilySearch expects { "query": ... }
+    search_output = search_tool.invoke({"query": query})
+    
+    return {"search_results": str(search_output)}
 
-# ✅ STEP 2: GPT summarizes the results
-def summarize_results(state):
-    results = state.get("search_results")
-    question = state.get("question")
+# ✅ Node 2: Use GPT-4o to summarize search result
+def summarize_results(state: GraphState) -> dict:
+    question = state["question"]
+    results = state["search_results"]
 
-    prompt = f"""You are a helpful assistant. Based on the following web search output, answer the user query:
+    prompt = f"""
+You are an assistant. Use the following search results to answer the user query.
 
-    User Question: {question}
+User Question:
+{question}
 
-    Web Result: {results}
+Search Results:
+{results}
 
-    Answer:"""
+Please extract and summarize the relevant price in LKR (Sri Lankan Rupees).
+"""
 
-    answer = llm.invoke(prompt)
-    return {"answer": answer.content}
+    response = llm.invoke(prompt)
+    return {"answer": response.content}
 
-# ✅ Build the Graph
-graph = StateGraph(AssistantState)
+# ✅ Build the graph with proper state type
+workflow = StateGraph(GraphState)
 
-graph.add_node("search_web", run_search)
-graph.add_node("summarize", summarize_results)
+# Add nodes
+workflow.add_node("search", run_search)
+workflow.add_node("summarize", summarize_results)
 
-graph.set_entry_point("search_web")
-graph.add_edge("search_web", "summarize")
-graph.add_edge("summarize", END)
+# Set the entry point
+workflow.set_entry_point("search")
 
-# ✅ Compile the graph
-app = graph.compile()
+# Add edges
+workflow.add_edge("search", "summarize")
+workflow.add_edge("summarize", END)
 
-# === RUN IT! ===
+# ✅ Compile the app
+app = workflow.compile()
+
+# ✅ Run the app
 if __name__ == "__main__":
-    user_question = input("❓ Ask about iPhone prices in Sri Lanka: ")
-    result = app.invoke({"question": user_question})
+    print("💬 iPhone Price Assistant (LangGraph)")
+    user_input = input("❓ Ask a question (e.g., 'Latest iPhone 15 price in Sri Lanka'): ")
 
-    print("\n📱 Answer from Assistant:")
+    # Initialize all required state fields
+    initial_state = {
+        "question": user_input,
+        "search_results": "",
+        "answer": ""
+    }
+
+    result = app.invoke(initial_state)
+
+    print("\n📱 Assistant Answer:")
     print(result["answer"])
